@@ -11,8 +11,9 @@ sudo yum install -y session-manager-plugin.rpm
 sudo curl --silent --location -o /usr/local/bin/kubectl \
    https://amazon-eks.s3.us-west-2.amazonaws.com/1.17.11/2020-09-18/bin/linux/amd64/kubectl
 sudo chmod +x /usr/local/bin/kubectl
-echo 'source <(kubectl completion bash)' >>~/.bashrc
-source ~/.bashrc
+sudo eksctl completion bash >> ~/.bash_completion
+. /etc/profile.d/bash_completion.sh
+. ~/.bash_completion
 
 #Install yq for yaml processing
 echo 'yq() {
@@ -22,8 +23,9 @@ echo 'yq() {
 #Install eksctl and enable eksctl bash_completion
 curl --silent --location "https://github.com/weaveworks/eksctl/releases/download/latest_release/eksctl_$(uname -s)_amd64.tar.gz" | tar xz -C /tmp
 sudo mv -v /tmp/eksctl /usr/local/bin
-echo 'source <(eksctl completion bash)' >>~/.bashrc
-source ~/.bashrc
+sudo eksctl completion bash >> ~/.bash_completion
+. /etc/profile.d/bash_completion.sh
+. ~/.bash_completion
 
 #Verify the binaries are in the path and executable
 if ! [ -x "$(command -v jq)" ] || ! [ -x "$(command -v envsubst)" ] || ! [ -x "$(command -v kubectl)" ] || ! [ -x "$(command -v eksctl)" ] || ! [ -x "$(command -v ssm-cli)" ]; then
