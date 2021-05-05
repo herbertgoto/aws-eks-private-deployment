@@ -1,0 +1,549 @@
+---
+AWSTemplateFormatVersion: "2010-09-09"
+Description: This stack deploys the additional networking components to have a functional fully-private EKS cluster
+
+Parameters:
+
+  VPC:
+    Type: String
+    Description: The VPC ID of the EKS cluster. 
+    # vpc-0e9f33e2a70578227 
+
+  AZsIds:
+    Type: CommaDelimitedList
+    Description: The IDs of the AZs used by the eksctl to deploy the cluster. 
+    # us-west-2a,us-west-2b,us-west-2c
+
+  subnetIds:
+    Type: CommaDelimitedList
+    Description: The subnet Ids created by the eksctl to deploy the cluster. 
+    # subnet-097353703a2b47395, subnet-0fc479a7da75d261b, subnet-092af4bab4c625965
+
+  workersSG:
+    Type: CommaDelimitedList
+    Description: The security group id for communication between all worker nodes.
+    # sg-03e4ec2e7999cde8f
+
+  EC2Image:
+    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
+    Default: /aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2
+    AllowedValues: 
+      - /aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2
+    Description: This parameter retrieves the most recent Amazon Linux AMI, leave this value as is.
+
+  EKSRoleName:
+    Type: String
+    Description: The IAM Role name used to create the cluster.
+    # AppMesh-Workshop-Admin
+
+  PrivateRTs:
+    Type: CommaDelimitedList
+    Description: The private route table ids created by the eksctl.
+    # rtb-0a1eded9880625a24,rtb-0fb631cc28180545e,rtb-03363d813d266ff27
+
+  S3BUCKET:
+    Type: String
+    Description: The name of the bucket with tooling for jumpbox.
+    # aws-s3-bucket-eks-private
+
+Mappings:
+
+  SubnetConfig:
+    SubnetNATOne:
+      CIDR: '192.168.192.0/28'
+    SubnetNATTwo:
+      CIDR: '192.168.192.16/28'
+    SubnetNATThree:
+      CIDR: '192.168.192.32/28'
+    SubnetNWFWOne:
+      CIDR: '192.168.192.48/28'
+    SubnetNWFWTwo:
+      CIDR: '192.168.192.64/28'
+    SubnetNWFWThree:
+      CIDR: '192.168.192.80/28'
+
+Resources:
+
+  NATSubnetOne:
+    Type: AWS::EC2::Subnet
+    Properties:
+      AvailabilityZone: !Select [ 0, !Ref AZsIds ]
+      VpcId: !Ref VPC
+      CidrBlock: !FindInMap ['SubnetConfig', 'SubnetNATOne', 'CIDR']
+      Tags:
+        - Key: Name
+          Value: 
+            !Join
+              - ''
+              - - 'eks-private-cluster/SubnetNAT-'
+                - !Select [ 0, !Ref AZsIds ]
+
+  NATSubnetTwo:
+    Type: AWS::EC2::Subnet
+    Properties:
+      AvailabilityZone: !Select [ 1, !Ref AZsIds ]
+      VpcId: !Ref VPC
+      CidrBlock: !FindInMap ['SubnetConfig', 'SubnetNATTwo', 'CIDR']
+      Tags:
+        - Key: Name
+          Value: 
+            !Join
+              - ''
+              - - 'eks-private-cluster/SubnetNAT-'
+                - !Select [ 1, !Ref AZsIds ]
+
+  NATSubnetThree:
+    Type: AWS::EC2::Subnet
+    Properties:
+      AvailabilityZone: !Select [ 2, !Ref AZsIds ]
+      VpcId: !Ref VPC
+      CidrBlock: !FindInMap ['SubnetConfig', 'SubnetNATThree', 'CIDR']
+      Tags:
+        - Key: Name
+          Value: 
+            !Join
+              - ''
+              - - 'eks-private-cluster/SubnetNAT-'
+                - !Select [ 2, !Ref AZsIds ]
+
+  FirewallSubnetOne:
+    Type: AWS::EC2::Subnet
+    Properties:
+      AvailabilityZone: !Select [ 0, !Ref AZsIds ]
+      VpcId: !Ref VPC
+      CidrBlock: !FindInMap ['SubnetConfig', 'SubnetNWFWOne', 'CIDR']
+      Tags:
+        - Key: Name
+          Value:
+            !Join
+              - ''
+              - - 'eks-private-cluster/SubnetNWFW-'
+                - !Select [ 0, !Ref AZsIds ]
+
+  FirewallSubnetTwo:
+    Type: AWS::EC2::Subnet
+    Properties:
+      AvailabilityZone: !Select [ 1, !Ref AZsIds ]
+      VpcId: !Ref VPC
+      CidrBlock: !FindInMap ['SubnetConfig', 'SubnetNWFWTwo', 'CIDR']
+      Tags:
+        - Key: Name
+          Value: 
+            !Join
+              - ''
+              - - 'eks-private-cluster/SubnetNWFW-'
+                - !Select [ 1, !Ref AZsIds ]
+
+  FirewallSubnetThree:
+    Type: AWS::EC2::Subnet
+    Properties:
+      AvailabilityZone: !Select [ 2, !Ref AZsIds ]
+      VpcId: !Ref VPC
+      CidrBlock: !FindInMap ['SubnetConfig', 'SubnetNWFWThree', 'CIDR']
+      Tags:
+        - Key: Name
+          Value: 
+            !Join
+              - ''
+              - - 'eks-private-cluster/SubnetNWFW-'
+                - !Select [ 2, !Ref AZsIds ]
+
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+  GatewayAttachement:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref VPC
+      InternetGatewayId: !Ref InternetGateway
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+          - Key: Name
+            Value: eks-private-cluster/NWFWRouteTable
+  PublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: GatewayAttachement
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+  NWFWSubnetOneRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref FirewallSubnetOne
+      RouteTableId: !Ref PublicRouteTable
+  NWFWSubnetTwoRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref FirewallSubnetTwo
+      RouteTableId: !Ref PublicRouteTable
+  NWFWSubnetThreeRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref FirewallSubnetThree
+      RouteTableId: !Ref PublicRouteTable
+
+  NatGatewayOneAttachment:
+    Type: AWS::EC2::EIP
+    DependsOn: GatewayAttachement
+    Properties:
+        Domain: vpc
+  NatGatewayTwoAttachment:
+    Type: AWS::EC2::EIP
+    DependsOn: GatewayAttachement
+    Properties:
+        Domain: vpc
+  NatGatewayThreeAttachment:
+    Type: AWS::EC2::EIP
+    DependsOn: GatewayAttachement
+    Properties:
+        Domain: vpc
+  
+  NatGatewayOne:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt NatGatewayOneAttachment.AllocationId
+      SubnetId: !Ref NATSubnetOne
+  NatGatewayTwo:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt NatGatewayTwoAttachment.AllocationId
+      SubnetId: !Ref NATSubnetTwo
+  NatGatewayThree:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt NatGatewayThreeAttachment.AllocationId
+      SubnetId: !Ref NATSubnetThree
+
+  StatefulNetworkFirewallRuleGroup:
+    Type: AWS::NetworkFirewall::RuleGroup
+    Properties: 
+      RuleGroupName: eks-private-stateful-rule
+      Type: STATEFUL
+      RuleGroup:
+        RulesSource:
+          RulesString: |
+            drop tcp $HOME_NET any -> $EXTERNAL_NET 443 (msg:"Drop established 443"; flow: from_client,established; sid:172190; priority:5; rev:1;)
+            pass http $HOME_NET any -> $EXTERNAL_NET 443 (http.host; content:"sts.amazonaws.com"; msg:"Allowed HTTP domain"; priority:10; sid:172191; rev:1;)
+            pass tls $HOME_NET any -> $EXTERNAL_NET any (msg:".amazonaws.com SNI Allow"; tls_sni; content:"sts.amazonaws.com"; sid:4; rev:1;)
+            drop tcp $HOME_NET any -> $EXTERNAL_NET !443 (msg:"Drop All non-TCP:443"; sid:172193; priority:2; rev:1;)
+      Capacity: 100
+      Description: Only allow traffic to sts.amazonaws.com
+
+  StatelessNetworkFirewallRuleGroup:
+    Type: AWS::NetworkFirewall::RuleGroup
+    Properties: 
+      RuleGroupName: eks-private-stateless-rule
+      Type: STATELESS
+      RuleGroup:
+        RulesSource:
+          StatelessRulesAndCustomActions:
+            StatelessRules:
+              - RuleDefinition:
+                  MatchAttributes:
+                    Sources:
+                      - AddressDefinition: 0.0.0.0/0
+                    Destinations:
+                      - AddressDefinition: 0.0.0.0/0
+                    SourcePorts:
+                      - FromPort: 0
+                        ToPort: 65535
+                    DestinationPorts:
+                      - FromPort: 443
+                        ToPort: 443
+                    Protocols:
+                      - 6
+                  Actions:
+                    - 'aws:forward_to_sfe'
+                Priority: 1
+              - RuleDefinition:
+                  MatchAttributes:
+                    Sources:
+                      - AddressDefinition: 0.0.0.0/0
+                    Destinations:
+                      - AddressDefinition: 0.0.0.0/0
+                    SourcePorts:
+                      - FromPort: 443
+                        ToPort: 443
+                    DestinationPorts:
+                      - FromPort: 0
+                        ToPort: 65535
+                    Protocols:
+                      - 6
+                  Actions:
+                    - 'aws:forward_to_sfe'
+                Priority: 3
+              - RuleDefinition:
+                  MatchAttributes:
+                    Sources:
+                      - AddressDefinition: 0.0.0.0/0
+                    Destinations:
+                      - AddressDefinition: 0.0.0.0/0
+                    SourcePorts:
+                      - FromPort: 0
+                        ToPort: 65535
+                    DestinationPorts:
+                      - FromPort: 0
+                        ToPort: 65535
+                    Protocols:
+                      - 6
+                  Actions:
+                    - 'aws:drop'
+                Priority: 5
+      Capacity: 100
+      Description: Only forwards 443 traffic to stateful rule and drops everything else
+
+  NetworkFirewallPolicy:
+    Type: AWS::NetworkFirewall::FirewallPolicy
+    DependsOn: StatefulNetworkFirewallRuleGroup
+    Properties: 
+      FirewallPolicyName: eks-private-firewall-policy
+      FirewallPolicy:
+        StatelessDefaultActions:
+          - 'aws:forward_to_sfe'
+        StatelessFragmentDefaultActions:
+          - 'aws:forward_to_sfe'
+        StatefulRuleGroupReferences:
+          - ResourceArn: !Ref StatefulNetworkFirewallRuleGroup
+        StatelessRuleGroupReferences:
+          - ResourceArn: !Ref StatelessNetworkFirewallRuleGroup
+            Priority: 1
+      Description: FirewallPolicy description goes here
+
+  NetworkFirewall:
+    Type: AWS::NetworkFirewall::Firewall
+    DependsOn: NetworkFirewallPolicy
+    Properties: 
+      FirewallName: eks-private-network-firewall
+      FirewallPolicyArn: !Ref NetworkFirewallPolicy
+      VpcId: !Ref VPC
+      SubnetMappings:
+        - SubnetId: !Ref FirewallSubnetOne
+        - SubnetId: !Ref FirewallSubnetTwo
+        - SubnetId: !Ref FirewallSubnetThree
+      Description: Firewall to allow/deny outbound traffic from EKS worker nodes
+
+  PrivateRouteOne:
+    Type: AWS::EC2::Route
+    DependsOn: NatGatewayOne
+    Properties:
+      RouteTableId: !Select [ 0, !Ref PrivateRTs ]
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NatGatewayOne
+
+  PrivateRouteTwo:
+    Type: AWS::EC2::Route
+    DependsOn: NatGatewayTwo
+    Properties:
+      RouteTableId: !Select [ 1, !Ref PrivateRTs ]
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NatGatewayTwo
+
+  PrivateRouteThree:
+    Type: AWS::EC2::Route
+    DependsOn: NatGatewayThree
+    Properties:
+      RouteTableId: !Select [ 2, !Ref PrivateRTs ]
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NatGatewayThree
+
+  NATRouteTableOne:
+    Type: AWS::EC2::RouteTable
+    DependsOn: NATSubnetOne
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+          - Key: Name
+            Value: 
+              !Join
+                - ''
+                - - 'eks-private-cluster/NATRouteTable-'
+                  - !Select [ 0, !Ref AZsIds ]
+  NATRouteTableOneAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    DependsOn: NATRouteTableOne
+    Properties:
+      RouteTableId: !Ref NATRouteTableOne
+      SubnetId: !Ref NATSubnetOne
+  NATRouteOne:
+    Type: AWS::EC2::Route
+    DependsOn: NetworkFirewall
+    Properties:
+      RouteTableId: !Ref NATRouteTableOne
+      DestinationCidrBlock: 0.0.0.0/0
+      VpcEndpointId: !Select [1, !Split [":", !Select [ 0, !GetAtt NetworkFirewall.EndpointIds ]]]
+
+  NATRouteTableTwo:
+    Type: AWS::EC2::RouteTable
+    DependsOn: NatGatewayTwo
+    Properties:
+      VpcId: !Ref VPC  
+      Tags:
+          - Key: Name
+            Value: 
+              !Join
+                - ''
+                - - 'eks-private-cluster/NATRouteTable-'
+                  - !Select [ 1, !Ref AZsIds ]
+  NATRouteTableTwoAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    DependsOn: NATRouteTableTwo
+    Properties:
+      RouteTableId: !Ref NATRouteTableTwo
+      SubnetId: !Ref NATSubnetTwo
+  NATRouteTwo:
+    Type: AWS::EC2::Route
+    DependsOn: NetworkFirewall
+    Properties:
+      RouteTableId: !Ref NATRouteTableTwo
+      DestinationCidrBlock: 0.0.0.0/0
+      VpcEndpointId: !Select [1, !Split [":", !Select [ 1, !GetAtt NetworkFirewall.EndpointIds ]]]
+
+  NATRouteTableThree:
+    Type: AWS::EC2::RouteTable
+    DependsOn: NatGatewayThree
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+          - Key: Name
+            Value: 
+              !Join
+                - ''
+                - - 'eks-private-cluster/NATRouteTable-'
+                  - !Select [ 2, !Ref AZsIds ]
+  NATRouteTableThreeAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    DependsOn: NATRouteTableThree
+    Properties:
+      RouteTableId: !Ref NATRouteTableThree
+      SubnetId: !Ref NATSubnetThree
+  NATRouteThree:
+    Type: AWS::EC2::Route
+    DependsOn: NetworkFirewall
+    Properties:
+      RouteTableId: !Ref NATRouteTableThree
+      DestinationCidrBlock: 0.0.0.0/0
+      VpcEndpointId: !Select [1, !Split [":", !Select [ 2, !GetAtt NetworkFirewall.EndpointIds ]]]
+  
+  EdgeRouteTable:
+    Type: AWS::EC2::RouteTable
+    DependsOn: NetworkFirewall
+    Properties:
+      VpcId: !Ref VPC  
+      Tags:
+          - Key: Name
+            Value: eks-private-cluster/EdgeRouteTable
+  EdgeRouteOne:
+    Type: AWS::EC2::Route
+    DependsOn: EdgeRouteTable
+    Properties:
+      RouteTableId: !Ref EdgeRouteTable
+      DestinationCidrBlock: !FindInMap ['SubnetConfig', 'SubnetNATOne', 'CIDR']
+      VpcEndpointId: !Select [1, !Split [":", !Select [ 0, !GetAtt NetworkFirewall.EndpointIds ]]]
+  EdgeRouteTwo:
+    Type: AWS::EC2::Route
+    DependsOn: EdgeRouteTable
+    Properties:
+      RouteTableId: !Ref EdgeRouteTable
+      DestinationCidrBlock: !FindInMap ['SubnetConfig', 'SubnetNATTwo', 'CIDR']
+      VpcEndpointId: !Select [1, !Split [":", !Select [ 1, !GetAtt NetworkFirewall.EndpointIds ]]]
+  EdgeRouteThree:
+    Type: AWS::EC2::Route
+    DependsOn: EdgeRouteTable
+    Properties:
+      RouteTableId: !Ref EdgeRouteTable
+      DestinationCidrBlock: !FindInMap ['SubnetConfig', 'SubnetNATThree', 'CIDR']
+      VpcEndpointId: !Select [1, !Split [":", !Select [ 2, !GetAtt NetworkFirewall.EndpointIds ]]]
+  EdgeRouteTableAssociation:
+    Type: AWS::EC2::GatewayRouteTableAssociation
+    Properties: 
+      GatewayId: !Ref InternetGateway
+      RouteTableId: !Ref EdgeRouteTable
+
+  EC2MVPCEndpoint:
+    Type: 'AWS::EC2::VPCEndpoint'
+    Properties:
+      PrivateDnsEnabled: True       
+      SecurityGroupIds: !Ref workersSG
+      SubnetIds: !Ref subnetIds
+      VpcEndpointType: Interface
+      ServiceName: !Sub 'com.amazonaws.${AWS::Region}.ec2messages'
+      VpcId: !Ref VPC
+  
+  SSMVPCEndpoint:
+    Type: 'AWS::EC2::VPCEndpoint'
+    Properties:
+      PrivateDnsEnabled: True       
+      SecurityGroupIds: !Ref workersSG
+      SubnetIds: !Ref subnetIds
+      VpcEndpointType: Interface
+      ServiceName: !Sub 'com.amazonaws.${AWS::Region}.ssm'
+      VpcId: !Ref VPC
+  
+  SSMMessagesVPCEndpoint:
+    Type: 'AWS::EC2::VPCEndpoint'
+    Properties:
+      PrivateDnsEnabled: True       
+      SecurityGroupIds: !Ref workersSG
+      SubnetIds: !Ref subnetIds
+      VpcEndpointType: Interface
+      ServiceName: !Sub 'com.amazonaws.${AWS::Region}.ssmmessages'
+      VpcId: !Ref VPC
+
+  ELBVPCEndpoint:
+    Type: 'AWS::EC2::VPCEndpoint'
+    Properties:
+      PrivateDnsEnabled: True       
+      SecurityGroupIds: !Ref workersSG
+      SubnetIds: !Ref subnetIds
+      VpcEndpointType: Interface
+      ServiceName: !Sub 'com.amazonaws.${AWS::Region}.elasticloadbalancing'
+      VpcId: !Ref VPC
+
+  Jumpbox:
+    Type: AWS::EC2::Instance
+    Properties:
+      SecurityGroupIds: !Ref workersSG
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          yum -y update
+          aws configure set default.region ${AWS::Region}
+          aws s3 cp s3://${S3BUCKET}/tools/eksctl /usr/local/bin/eksctl
+          chmod +x /usr/local/bin/eksctl
+          eksctl completion bash >> ~/.bash_completion
+          . /etc/profile.d/bash_completion.sh
+          . ~/.bash_completion
+          aws s3 cp s3://${S3BUCKET}/tools/kubectl /usr/local/bin/kubectl
+          chmod +x /usr/local/bin/kubectl
+          kubectl completion bash >>  ~/.bash_completion
+          . /etc/profile.d/bash_completion.sh
+          . ~/.bash_completion
+      InstanceType: t3.large
+      SubnetId: !Select [ 0, !Ref subnetIds ]
+      ImageId: !Ref EC2Image
+      IamInstanceProfile: !Ref EKSRoleName
+      Tags:
+        -
+          Key: Name
+          Value: eks-private-cluster/Jumpbox
+
+Outputs:
+  FirewallSubnetOne:
+    Value: !Ref FirewallSubnetOne
+  FirewallSubnetTwo:
+    Value: !Ref FirewallSubnetTwo
+  FirewallSubnetThree:
+    Value: !Ref FirewallSubnetThree
+  NATSubnetOne:
+    Value: !Ref NATSubnetOne
+  NATSubnetTwo:
+    Value: !Ref NATSubnetTwo
+  NATSubnetThree:
+    Value: !Ref NATSubnetThree
+  NetworkFirewall:
+    Value: !GetAtt NetworkFirewall.FirewallArn
+  JumpboxInstanceId:
+    Value: !Ref Jumpbox
