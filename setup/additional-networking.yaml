@@ -36,12 +36,12 @@ Parameters:
     Description: The IAM Role name used to create the cluster.
     # AppMesh-Workshop-Admin
 
-  PrivateRTs:
+  privateRTs:
     Type: CommaDelimitedList
     Description: The private route table ids created by the eksctl.
     # rtb-0a1eded9880625a24,rtb-0fb631cc28180545e,rtb-03363d813d266ff27
 
-  S3BUCKET:
+  S3Bucket:
     Type: String
     Description: The name of the bucket with tooling for jumpbox.
     # aws-s3-bucket-eks-private
@@ -329,7 +329,7 @@ Resources:
     Type: AWS::EC2::Route
     DependsOn: NatGatewayOne
     Properties:
-      RouteTableId: !Select [ 0, !Ref PrivateRTs ]
+      RouteTableId: !Select [ 0, !Ref privateRTs ]
       DestinationCidrBlock: 0.0.0.0/0
       NatGatewayId: !Ref NatGatewayOne
 
@@ -337,7 +337,7 @@ Resources:
     Type: AWS::EC2::Route
     DependsOn: NatGatewayTwo
     Properties:
-      RouteTableId: !Select [ 1, !Ref PrivateRTs ]
+      RouteTableId: !Select [ 1, !Ref privateRTs ]
       DestinationCidrBlock: 0.0.0.0/0
       NatGatewayId: !Ref NatGatewayTwo
 
@@ -345,7 +345,7 @@ Resources:
     Type: AWS::EC2::Route
     DependsOn: NatGatewayThree
     Properties:
-      RouteTableId: !Select [ 2, !Ref PrivateRTs ]
+      RouteTableId: !Select [ 2, !Ref privateRTs ]
       DestinationCidrBlock: 0.0.0.0/0
       NatGatewayId: !Ref NatGatewayThree
 
@@ -511,12 +511,12 @@ Resources:
           #!/bin/bash
           yum -y update
           aws configure set default.region ${AWS::Region}
-          aws s3 cp s3://${S3BUCKET}/tools/eksctl /usr/local/bin/eksctl
+          aws s3 cp s3://${S3Bucket}/tools/eksctl /usr/local/bin/eksctl
           chmod +x /usr/local/bin/eksctl
           eksctl completion bash >> ~/.bash_completion
           . /etc/profile.d/bash_completion.sh
           . ~/.bash_completion
-          aws s3 cp s3://${S3BUCKET}/tools/kubectl /usr/local/bin/kubectl
+          aws s3 cp s3://${S3Bucket}/tools/kubectl /usr/local/bin/kubectl
           chmod +x /usr/local/bin/kubectl
           kubectl completion bash >>  ~/.bash_completion
           . /etc/profile.d/bash_completion.sh
