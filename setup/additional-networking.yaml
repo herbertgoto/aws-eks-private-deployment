@@ -226,8 +226,8 @@ Resources:
         RulesSource:
           RulesString: |
             drop tcp $HOME_NET any -> $EXTERNAL_NET 443 (msg:"Drop established 443"; flow: from_client,established; sid:172190; priority:5; rev:1;)
-            pass http $HOME_NET any -> $EXTERNAL_NET 443 (http.host; content:"sts.amazonaws.com"; msg:"Allowed HTTP domain"; priority:10; sid:172191; rev:1;)
-            pass tls $HOME_NET any -> $EXTERNAL_NET any (msg:".amazonaws.com SNI Allow"; tls_sni; content:"sts.amazonaws.com"; sid:4; rev:1;)
+            pass http $HOME_NET any -> $EXTERNAL_NET 443 (http.host; dotprefix; content:".amazonaws.com"; msg:"Allowed HTTP domain"; priority:10; sid:172191; rev:1;)
+            pass tls $HOME_NET any -> $EXTERNAL_NET any (msg:".amazonaws.com SNI Allow"; tls_sni; content:".amazonaws.com"; sid:4; rev:1;)
             drop tcp $HOME_NET any -> $EXTERNAL_NET !443 (msg:"Drop All non-TCP:443"; sid:172193; priority:2; rev:1;)
       Capacity: 100
       Description: Only allow traffic to sts.amazonaws.com
