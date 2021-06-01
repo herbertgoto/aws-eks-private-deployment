@@ -17,5 +17,5 @@ if ! [ -x "$(command -v jq)" ] || ! [ -x "$(command -v envsubst)" ] || ! [ -x "$
   exit 1
 fi
 
-#Update awscli
+#Upgrades awscli
 pip install awscli --upgrade --user
