@@ -6,7 +6,6 @@ cat << EOF > nw-fw-policy-document
     "Version": "2012-10-17",
     "Statement": [
         {
-            "Sid": "VisualEditor0",
             "Effect": "Allow",
             "Action": [
                 "network-firewall:CreateFirewall",
@@ -53,7 +52,6 @@ cat << EOF > s3-policy-document
     "Version": "2012-10-17",
     "Statement": [
         {
-            "Sid": "VisualEditor0",
             "Effect": "Allow",
             "Action": [
                 "s3:PutObject",
@@ -137,7 +135,6 @@ cat << EOF > iam-policy-document
             }
         },
         {
-            "Sid": "VisualEditor0",
             "Effect": "Allow",
             "Action": "iam:PassRole",
             "Resource": "arn:aws:iam::${ACCOUNT_ID}:role/${EKS_ROLE_NAME}"
@@ -181,6 +178,25 @@ cat << EOF > eks-policy-document
 EOF
 aws iam create-policy --policy-name private-eks-all --policy-document file://eks-policy-document
 
+# Custom policy for EKS All Access
+cat << EOF > ecr-policy-document
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Effect": "Allow",
+            "Action": [
+                "ecr:CreateRepository",
+                "ecr:GetAuthorizationToken",
+                "ecr:DeleteRepository"
+            ],
+            "Resource": "*"
+        }
+    ]
+}
+EOF
+aws iam create-policy --policy-name private-eks-ecr --policy-document file://ecr-policy-document
+
 # Role trust policy
 cat << EOF > trust-policy-document
 {
@@ -213,6 +229,7 @@ aws iam attach-role-policy --policy-arn arn:aws:iam::${ACCOUNT_ID}:policy/privat
 aws iam attach-role-policy --policy-arn arn:aws:iam::${ACCOUNT_ID}:policy/private-eks-iam-limited --role-name ${EKS_ROLE_NAME}
 aws iam attach-role-policy --policy-arn arn:aws:iam::${ACCOUNT_ID}:policy/private-eks-nw-fw --role-name ${EKS_ROLE_NAME}
 aws iam attach-role-policy --policy-arn arn:aws:iam::${ACCOUNT_ID}:policy/private-eks-s3 --role-name ${EKS_ROLE_NAME}
+aws iam attach-role-policy --policy-arn arn:aws:iam::${ACCOUNT_ID}:policy/private-eks-ecr --role-name ${EKS_ROLE_NAME}
 
 # Clean up
 rm -rf *-document
