@@ -22,7 +22,9 @@ cat << EOF > nw-fw-policy-document
                 "network-firewall:DescribeResourcePolicy",
                 "network-firewall:DeleteFirewall",
                 "network-firewall:PutResourcePolicy",
-                "network-firewall:CreateFirewallPolicy"
+                "network-firewall:CreateFirewallPolicy",
+                "network-firewall:UpdateFirewallPolicy",
+                "network-firewall:ListRuleGroups"
             ],
             "Resource": "*"
         },

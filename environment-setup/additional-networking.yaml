@@ -217,8 +217,72 @@ Resources:
       AllocationId: !GetAtt NatGatewayThreeAttachment.AllocationId
       SubnetId: !Ref NATSubnetThree
 
+StatelessNetworkFirewallRuleGroup:
+    Type: AWS::NetworkFirewall::RuleGroup
+    Properties: 
+      RuleGroupName: eks-private-stateless-rule
+      Type: STATELESS
+      RuleGroup:
+        RulesSource:
+          StatelessRulesAndCustomActions:
+            StatelessRules:
+              - RuleDefinition:
+                  MatchAttributes:
+                    Sources:
+                      - AddressDefinition: 0.0.0.0/0
+                    Destinations:
+                      - AddressDefinition: 0.0.0.0/0
+                    SourcePorts:
+                      - FromPort: 0
+                        ToPort: 65535
+                    DestinationPorts:
+                      - FromPort: 443
+                        ToPort: 443
+                    Protocols:
+                      - 6
+                  Actions:
+                    - 'aws:forward_to_sfe'
+                Priority: 1
+              - RuleDefinition:
+                  MatchAttributes:
+                    Sources:
+                      - AddressDefinition: 0.0.0.0/0
+                    Destinations:
+                      - AddressDefinition: 0.0.0.0/0
+                    SourcePorts:
+                      - FromPort: 443
+                        ToPort: 443
+                    DestinationPorts:
+                      - FromPort: 0
+                        ToPort: 65535
+                    Protocols:
+                      - 6
+                  Actions:
+                    - 'aws:forward_to_sfe'
+                Priority: 3
+              - RuleDefinition:
+                  MatchAttributes:
+                    Sources:
+                      - AddressDefinition: 0.0.0.0/0
+                    Destinations:
+                      - AddressDefinition: 0.0.0.0/0
+                    SourcePorts:
+                      - FromPort: 0
+                        ToPort: 65535
+                    DestinationPorts:
+                      - FromPort: 0
+                        ToPort: 65535
+                    Protocols:
+                      - 6
+                  Actions:
+                    - 'aws:drop'
+                Priority: 5
+      Capacity: 100
+      Description: Only forwards 443 traffic to stateful rule and drops everything else
+
   NetworkFirewallPolicy:
     Type: AWS::NetworkFirewall::FirewallPolicy
+    DependsOn: StatelessNetworkFirewallRuleGroup
     Properties: 
       FirewallPolicyName: eks-private-firewall-policy
       FirewallPolicy:
@@ -226,6 +290,9 @@ Resources:
           - 'aws:forward_to_sfe'
         StatelessFragmentDefaultActions:
           - 'aws:forward_to_sfe'
+        StatelessRuleGroupReferences:
+          - ResourceArn: !Ref StatelessNetworkFirewallRuleGroup
+            Priority: 1
       Description: FirewallPolicy description goes here
 
   NetworkFirewall:
@@ -463,3 +530,7 @@ Outputs:
     Value: !GetAtt NetworkFirewall.FirewallArn
   JumpboxInstanceId:
     Value: !Ref Jumpbox
+  NetworkFirewallPolicy:
+    Value: !Ref NetworkFirewallPolicy
+  StatelessNetworkFirewallRuleGroup:
+    Value: !Ref StatelessNetworkFirewallRuleGroup
