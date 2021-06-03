@@ -71,7 +71,7 @@ cat << EOF > s3-policy-document
 EOF
 aws iam create-policy --policy-name private-eks-s3 --policy-document file://s3-policy-document
 
-# Custom policy for IAM limited access
+# Custom policy for IAM and SSM limited access
 cat << EOF > iam-policy-document 
 {
     "Version": "2012-10-17",
@@ -138,13 +138,20 @@ cat << EOF > iam-policy-document
             "Effect": "Allow",
             "Action": "iam:PassRole",
             "Resource": "arn:aws:iam::${ACCOUNT_ID}:role/${EKS_ROLE_NAME}"
+        },
+        {
+            "Effect": "Allow",
+            "Action": [
+                "ssm:StartSession"
+            ],
+            "Resource": "*"
         }
     ]
 }
 EOF
 aws iam create-policy --policy-name private-eks-iam-limited --policy-document file://iam-policy-document
 
-# Custom policy for EKS All Access
+# Custom policy for EKS and ECR Access
 cat << EOF > eks-policy-document
 {
     "Version": "2012-10-17",
@@ -172,30 +179,26 @@ cat << EOF > eks-policy-document
             ],
             "Resource": "*",
             "Effect": "Allow"
-        }
-    ]
-}
-EOF
-aws iam create-policy --policy-name private-eks-all --policy-document file://eks-policy-document
-
-# Custom policy for EKS All Access
-cat << EOF > ecr-policy-document
-{
-    "Version": "2012-10-17",
-    "Statement": [
+        },
         {
             "Effect": "Allow",
             "Action": [
                 "ecr:CreateRepository",
+                "ecr:CompleteLayerUpload",
                 "ecr:GetAuthorizationToken",
-                "ecr:DeleteRepository"
+                "ecr:UploadLayerPart",
+                "ecr:InitiateLayerUpload",
+                "ecr:DeleteRepository",
+                "ecr:BatchCheckLayerAvailability",
+                "ecr:PutImage",
+                "ecr:DescribeRepositories"
             ],
             "Resource": "*"
         }
     ]
 }
 EOF
-aws iam create-policy --policy-name private-eks-ecr --policy-document file://ecr-policy-document
+aws iam create-policy --policy-name private-eks-all --policy-document file://eks-policy-document
 
 # Role trust policy
 cat << EOF > trust-policy-document
@@ -229,7 +232,6 @@ aws iam attach-role-policy --policy-arn arn:aws:iam::${ACCOUNT_ID}:policy/privat
 aws iam attach-role-policy --policy-arn arn:aws:iam::${ACCOUNT_ID}:policy/private-eks-iam-limited --role-name ${EKS_ROLE_NAME}
 aws iam attach-role-policy --policy-arn arn:aws:iam::${ACCOUNT_ID}:policy/private-eks-nw-fw --role-name ${EKS_ROLE_NAME}
 aws iam attach-role-policy --policy-arn arn:aws:iam::${ACCOUNT_ID}:policy/private-eks-s3 --role-name ${EKS_ROLE_NAME}
-aws iam attach-role-policy --policy-arn arn:aws:iam::${ACCOUNT_ID}:policy/private-eks-ecr --role-name ${EKS_ROLE_NAME}
 
 # Clean up
 rm -rf *-document
