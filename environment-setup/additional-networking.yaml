@@ -217,7 +217,7 @@ Resources:
       AllocationId: !GetAtt NatGatewayThreeAttachment.AllocationId
       SubnetId: !Ref NATSubnetThree
 
-StatelessNetworkFirewallRuleGroup:
+  StatelessNetworkFirewallRuleGroup:
     Type: AWS::NetworkFirewall::RuleGroup
     Properties: 
       RuleGroupName: eks-private-stateless-rule
