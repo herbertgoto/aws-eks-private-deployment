@@ -145,6 +145,13 @@ cat << EOF > iam-policy-document
                 "ssm:StartSession"
             ],
             "Resource": "*"
+        },
+        {
+            "Effect": "Allow",
+            "Action": [
+                "logs:ListLogDeliveries"
+            ],
+            "Resource": "*"
         }
     ]
 }
